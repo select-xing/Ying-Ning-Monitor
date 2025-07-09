@@ -13,7 +13,7 @@ from torchaudio.transforms import MelSpectrogram, Resample, TimeStretch, Frequen
 import matplotlib.pyplot as plt
 import torch.nn as nn
 from Resnet_BiLSTM import ResNet50DualAttention
-def cryDetecting(index):
+def cryDetecting():
     config = AudioConfig()
     # 参数设置
     FORMAT = pyaudio.paInt16  # 16位采样深度
@@ -104,9 +104,8 @@ def cryDetecting(index):
     outputs = model(log_spec)
     _, predicted = torch.max(outputs, 1)
     categories = ['awake', 'diaper', 'hug', 'hungry', 'sleepy', 'uncomfortable']
-    temp = ['awake', 'uncomfortable', 'hungry']
     print(f"婴儿哭的原因是{categories[int(predicted)]}")
-    s = f"婴儿哭的原因是{temp[index]}"
+    s = f"婴儿哭的原因是{categories[int(predicted)]}"
     return s
 if __name__ == '__main__':
     cryDetecting()
