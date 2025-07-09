@@ -1,2 +1,0 @@
-在飞腾派上部署，需要opencv和ffmpeg环境。
-两个文件，cam_rtmp.py用于rtmp推流，cam_rtsp.py用于rtsp推流
