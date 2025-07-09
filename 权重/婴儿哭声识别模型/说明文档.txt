@@ -1,0 +1,9 @@
+1.需要测试的话，直接运行test文件即可，但需要Pytorch库，这个代码是调用电脑的麦克风进行录制音频，然后进行模型推理。
+2.main和main2文件分别是在哭声数据集和大音频数据集audio训练模型的代码。
+3.best_BiLSTM_model2和best_BiLSTM_model2_val文件是模型的权重文件，分别对应大音频数据集和哭声数据集的模型权重文件。
+4.Resnet_DualAttention是模型架构文件，涉及模型的架构的搭建。
+5.split文件是切分成3-4秒音频文件的一个简单代码
+6.data_process是预数据处理文件
+7.BabyCryDataset是一个定义婴儿数据集的类，主要用于dataloader的加载
+8.baby_cry_data是哭声数据集
+9.audio是大音频数据集
