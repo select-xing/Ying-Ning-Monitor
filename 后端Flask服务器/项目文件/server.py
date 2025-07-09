@@ -337,13 +337,10 @@ def com_show():
         print(e)
         return "{}"
     
-index = 0
 
 @app.route('/cry_detect')
 def cry_detect():
-    global index
-    result = cryDetecting(index)
-    index = (index + 1)%3
+    result = cryDetecting()
     return result
 
 @app.route('/player')
