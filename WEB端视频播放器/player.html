@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>婴宁电子围栏</title>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            height: 100vh;
+            overflow: hidden;
+            position: relative;
+            touch-action: manipulation;
+        }
+
+        #player-container {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 60px);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #video-wrapper {
+            position: relative;
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        #video {
+            max-width: 100%;
+            max-height: 100%;
+            background-color: #000;
+        }
+
+        #drawing-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 2;
+        }
+
+        #error {
+            position: absolute;
+            top: 50%;
+            left: 0;
+            right: 0;
+            color: white;
+            text-align: center;
+            transform: translateY(-50%);
+            padding: 20px;
+            display: none;
+            z-index: 100;
+        }
+
+        #controls {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 60px;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 10;
+        }
+
+        #result-display {
+            display: none;
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 5px;
+            z-index: 100;
+            max-width: 80%;
+            text-align: center;
+            font-size: 14px;
+            word-break: break-word;
+        }
+
+        .control-btn {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 8px 16px;
+            margin: 0 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        .control-btn.clear {
+            background-color: #f44336;
+        }
+
+        .control-btn.toggle {
+            background-color: #2196F3;
+        }
+
+        .control-btn.predict {
+            background-color: #9C27B0;
+        }
+
+        .direction-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: 2px solid #4CAF50;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .direction-btn:hover {
+            background-color: #4CAF50;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+
+<body>
+    <div id="player-container">
+        <div id="video-wrapper">
+            <video id="video" autoplay playsinline webkit-playsinline x5-playsinline></video>
+            <canvas id="drawing-canvas"></canvas>
+        </div>
+        <div id="error"></div>
+    </div>
+    <div id="result-display"
+        style="display: none; position: fixed; top: 20px; left: 50%; transform: translateX(-50%); background-color: rgba(0,0,0,0.7); color: white; padding: 10px 20px; border-radius: 5px; z-index: 100; max-width: 80%; text-align: center;">
+    </div>
+    <div id="controls">
+        <button class="control-btn toggle" id="playPauseBtn">暂停</button>
+        <button class="control-btn clear" id="clearBtn">清除画图</button>
+        <button class="control-btn predict" id="predictBtn">预测</button>
+    </div>
+    <div id="direction-controls"
+        style="position: fixed; right: 20px; bottom: 100px; display: flex; flex-direction: column; align-items: center; z-index: 10;">
+        <button class="direction-btn up" style="margin: 5px;">↑</button>
+        <div>
+            <button class="direction-btn left" style="margin: 5px;">←</button>
+            <button class="direction-btn right" style="margin: 5px;">→</button>
+        </div>
+        <button class="direction-btn down" style="margin: 5px;">↓</button>
+    </div>
+    <script>
+        // 全局变量
+        let hls = null;
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let ctx = null;
+        let currentStreamUrl = '';
+        let videoNaturalWidth = 0;
+        let videoNaturalHeight = 0;
+
+        // 从URL参数获取流地址
+        function getQueryParam(name) {
+            const url = new URL(window.location.href);
+            return url.searchParams.get(name);
+        }
+
+        // 初始化画布
+        function initDrawingCanvas() {
+            const canvas = document.getElementById('drawing-canvas');
+            const video = document.getElementById('video');
+
+            // 设置画布尺寸与视频一致
+            function resizeCanvas() {
+                const rect = video.getBoundingClientRect();
+                canvas.width = rect.width;
+                canvas.height = rect.height;
+
+                // 保存视频原始尺寸
+                videoNaturalWidth = video.videoWidth || video.offsetWidth;
+                videoNaturalHeight = video.videoHeight || video.offsetHeight;
+            }
+
+            // 初始调整尺寸
+            resizeCanvas();
+
+            // 视频尺寸变化时调整画布
+            const resizeObserver = new ResizeObserver(resizeCanvas);
+            resizeObserver.observe(video);
+
+            return canvas.getContext('2d');
+        }
+
+        // 绘制单个点
+        function drawDot(x, y) {
+            ctx.beginPath();
+            ctx.arc(x, y, ctx.lineWidth / 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        // 绘制两点之间的线
+        function drawLine(x1, y1, x2, y2) {
+            ctx.beginPath();
+            ctx.moveTo(x1, y1);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        // 获取相对于视频的坐标
+        function getVideoRelativeCoordinates(clientX, clientY) {
+            const video = document.getElementById('video');
+            const rect = video.getBoundingClientRect();
+
+            // 计算相对于视频的坐标
+            let x = clientX - rect.left;
+            let y = clientY - rect.top;
+
+            // 确保坐标在视频范围内
+            x = Math.max(0, Math.min(x, rect.width));
+            y = Math.max(0, Math.min(y, rect.height));
+
+            return { x, y };
+        }
+
+        // 初始化画图功能
+        function initDrawing() {
+            const video = document.getElementById('video');
+            const canvas = document.getElementById('drawing-canvas');
+
+            // 确保我们使用的是正确的上下文
+            ctx = canvas.getContext('2d');
+
+            // 设置绘图样式（确保每次绘图前都应用这些样式）
+            function setDrawingStyle() {
+                ctx.strokeStyle = 'red';
+                ctx.fillStyle = 'red';
+                ctx.lineWidth = 4;
+                ctx.lineJoin = 'round';
+                ctx.lineCap = 'round';
+            }
+
+            // 开始绘图（按下）
+            function startDrawing(e) {
+                isDrawing = true;
+                const { x, y } = getVideoRelativeCoordinates(
+                    e.clientX || e.touches[0].clientX,
+                    e.clientY || e.touches[0].clientY
+                );
+
+                lastX = x;
+                lastY = y;
+
+                setDrawingStyle(); // 确保使用正确的样式
+                drawDot(x, y);
+            }
+
+            // 绘图过程中（移动）
+            function drawing(e) {
+                if (!isDrawing) return;
+
+                const { x, y } = getVideoRelativeCoordinates(
+                    e.clientX || e.touches[0].clientX,
+                    e.clientY || e.touches[0].clientY
+                );
+
+                setDrawingStyle(); // 确保使用正确的样式
+                drawLine(lastX, lastY, x, y);
+
+                lastX = x;
+                lastY = y;
+            }
+
+            // 结束绘图（松开）
+            function endDrawing() {
+                isDrawing = false;
+            }
+
+            // 鼠标事件
+            video.addEventListener('mousedown', startDrawing);
+            video.addEventListener('mousemove', drawing);
+            video.addEventListener('mouseup', endDrawing);
+            video.addEventListener('mouseout', endDrawing);
+
+            // 触摸事件
+            video.addEventListener('touchstart', function (e) {
+                e.preventDefault();
+                startDrawing(e.touches[0]);
+            });
+
+            video.addEventListener('touchmove', function (e) {
+                e.preventDefault();
+                drawing(e.touches[0]);
+            });
+
+            video.addEventListener('touchend', endDrawing);
+
+            // 初始设置样式
+            setDrawingStyle();
+        }
+
+        // 初始化控制按钮
+        function initControls() {
+            const video = document.getElementById('video');
+            const playPauseBtn = document.getElementById('playPauseBtn');
+            const clearBtn = document.getElementById('clearBtn');
+            const predictBtn = document.getElementById('predictBtn');
+
+            // 播放/暂停切换
+            playPauseBtn.addEventListener('click', function () {
+                if (video.paused) {
+                    loadVideoStream(currentStreamUrl); // 重新加载最新流
+                    this.textContent = '暂停';
+                } else {
+                    video.pause();
+                    this.textContent = '播放';
+                }
+            });
+
+            // 清除画图
+            clearBtn.addEventListener('click', function () {
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+            });
+
+            // 预测按钮点击事件
+            predictBtn.addEventListener('click', function () {
+                const predictApiUrl = getQueryParam('predict_api');
+                const video = document.getElementById('video');
+                const drawingCanvas = document.getElementById('drawing-canvas');
+                const resultDisplay = document.getElementById('result-display');
+
+                // 显示加载状态
+                resultDisplay.textContent = "正在分析中...";
+                resultDisplay.style.display = "block";
+
+                // 创建合并canvas
+                const mergedCanvas = document.createElement('canvas');
+                const mergedCtx = mergedCanvas.getContext('2d');
+                mergedCanvas.width = videoNaturalWidth;
+                mergedCanvas.height = videoNaturalHeight;
+
+                // 绘制视频帧和标注
+                mergedCtx.drawImage(video, 0, 0, mergedCanvas.width, mergedCanvas.height);
+                const scaleX = videoNaturalWidth / drawingCanvas.width;
+                const scaleY = videoNaturalHeight / drawingCanvas.height;
+                mergedCtx.save();
+                mergedCtx.scale(scaleX, scaleY);
+                mergedCtx.drawImage(drawingCanvas, 0, 0);
+                mergedCtx.restore();
+
+                // 发送请求
+                mergedCanvas.toBlob(function (blob) {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'annotated_frame.png');
+
+                    fetch(predictApiUrl, {
+                        method: 'POST',
+                        body: formData
+                    })
+                        .then(response => response.json())
+                        .then(data => {
+                            // 显示结果
+                            resultDisplay.textContent = `分析结果: ${JSON.stringify(data)}`;
+                            // 5秒后自动隐藏
+                            setTimeout(() => {
+                                resultDisplay.style.display = "none";
+                            }, 5000);
+                        })
+                        .catch(error => {
+                            resultDisplay.textContent = `分析失败: ${error.message}`;
+                            setTimeout(() => {
+                                resultDisplay.style.display = "none";
+                            }, 3000);
+                        });
+                }, 'image/png');
+            });
+        };
+        // 初始化方向控制按钮
+        function initDirectionControls() {
+            const controlIp = getQueryParam('control_api');
+            if (!controlIp) {
+                console.warn('未提供控制IP参数');
+                return;
+            }
+
+            // 发送控制命令的函数
+            function sendControlCommand(direction, isPressed) {
+                const command = { [direction]: isPressed };
+
+                fetch(`${controlIp}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(command)
+                })
+                    .then(response => {
+                        if (!response.ok) {
+                            throw new Error('控制命令发送失败');
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        console.log('控制成功:', data);
+                        // 视觉反馈
+                        const btn = document.querySelector(`.direction-btn.${direction}`);
+                        btn.style.backgroundColor = isPressed ? '#4CAF50' : '#2196F3';
+                    })
+                    .catch(error => {
+                        console.error('控制错误:', error);
+                        const btn = document.querySelector(`.direction-btn.${direction}`);
+                        btn.style.backgroundColor = '#f44336';
+                        setTimeout(() => {
+                            btn.style.backgroundColor = 'rgba(0,0,0,0.7)';
+                        }, 1000);
+                    });
+            }
+
+            // 为每个方向按钮添加事件监听
+            const buttons = document.querySelectorAll('.direction-btn');
+            buttons.forEach(btn => {
+                const direction = btn.classList.contains('up') ? 'up' :
+                    btn.classList.contains('down') ? 'down' :
+                        btn.classList.contains('left') ? 'left' : 'right';
+
+                // 鼠标按下事件
+                btn.addEventListener('mousedown', () => {
+                    sendControlCommand(direction, true);
+                });
+
+                // 鼠标松开事件
+                btn.addEventListener('mouseup', () => {
+                    sendControlCommand(direction, false);
+                });
+
+                // 鼠标移出按钮区域时也发送松开状态
+                btn.addEventListener('mouseleave', () => {
+                    if (btn.style.backgroundColor === '#4CAF50') {
+                        sendControlCommand(direction, false);
+                    }
+                });
+
+                // 触摸屏支持
+                btn.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    sendControlCommand(direction, true);
+                });
+
+                btn.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    sendControlCommand(direction, false);
+                });
+            });
+        }
+        // 修改HLS.js配置以减少卡顿
+        function loadVideoStream(streamUrl) {
+            const video = document.getElementById('video');
+            const errorDisplay = document.getElementById('error');
+
+            if (hls) {
+                hls.destroy();
+            }
+
+            currentStreamUrl = streamUrl;
+
+            if (Hls.isSupported()) {
+                hls = new Hls({
+                    maxBufferSize: 30 * 1000 * 1000,  // 增加缓冲区大小
+                    maxBufferLength: 30,               // 最大缓冲长度(秒)
+                    maxMaxBufferLength: 60,            // 最大允许缓冲长度
+                    maxBufferHole: 0.5,               // 最大允许的缓冲缺口
+                    lowLatencyMode: false,             // 关闭低延迟模式(更稳定)
+                    enableWorker: true,                // 启用Web Worker
+                    startLevel: -1,                    // 自动选择最佳质量
+                    abrEwmaDefaultEstimate: 500000,    // 默认带宽估计(bps)
+                    abrBandWidthFactor: 0.8,          // 带宽因子
+                    abrBandWidthUpFactor: 0.7,         // 带宽上升因子
+                    abrMaxWithRealBitrate: true        // 使用实际比特率
+                });
+
+                hls.loadSource(streamUrl);
+                hls.attachMedia(video);
+
+                hls.on(Hls.Events.MANIFEST_PARSED, function () {
+                    video.play().catch(e => {
+                        errorDisplay.textContent = '自动播放失败，请点击播放按钮';
+                        errorDisplay.style.display = 'block';
+                    });
+                });
+
+                hls.on(Hls.Events.ERROR, function (event, data) {
+                    if (data.fatal) {
+                        switch (data.type) {
+                            case Hls.ErrorTypes.NETWORK_ERROR:
+                                errorDisplay.textContent = '网络错误，正在尝试恢复...';
+                                hls.startLoad();
+                                break;
+                            case Hls.ErrorTypes.MEDIA_ERROR:
+                                errorDisplay.textContent = '媒体错误，正在尝试恢复...';
+                                hls.recoverMediaError();
+                                break;
+                            default:
+                                errorDisplay.textContent = '播放错误: ' + data.details;
+                                hls.destroy();
+                                break;
+                        }
+                        errorDisplay.style.display = 'block';
+                    }
+                });
+
+                // 监听视频元数据加载，获取原始尺寸
+                video.addEventListener('loadedmetadata', function () {
+                    videoNaturalWidth = video.videoWidth;
+                    videoNaturalHeight = video.videoHeight;
+                });
+            } else if (video.canPlayType('application/vnd.apple.mpegurl')) {
+                video.src = streamUrl;
+                video.addEventListener('loadedmetadata', function () {
+                    videoNaturalWidth = video.videoWidth;
+                    videoNaturalHeight = video.videoHeight;
+                    video.play().catch(e => {
+                        errorDisplay.textContent = '自动播放失败，请点击播放按钮';
+                        errorDisplay.style.display = 'block';
+                    });
+                });
+            } else {
+                errorDisplay.textContent = '您的浏览器不支持播放此视频';
+                errorDisplay.style.display = 'block';
+            }
+        }
+
+        // 初始化播放器
+        function initPlayer() {
+            const video = document.getElementById('video');
+            const errorDisplay = document.getElementById('error');
+
+            // 1. 从URL参数获取流地址
+            const streamUrl = getQueryParam('stream');
+            if (!streamUrl) {
+                errorDisplay.textContent = '未提供视频流地址';
+                errorDisplay.style.display = 'block';
+                return;
+            }
+
+            // 2. 隐藏页面URL
+            history.replaceState(null, null, ' ');
+
+            // 3. 初始化画布
+            ctx = initDrawingCanvas();
+
+            // 4. 初始化画图功能
+            initDrawing();
+
+            // 5. 初始化控制按钮
+            initControls();
+
+            initDirectionControls();
+
+            // 6. 加载视频流
+            loadVideoStream(streamUrl);
+
+            // 点击错误信息重试
+            errorDisplay.addEventListener('click', function () {
+                this.style.display = 'none';
+                video.play().catch(e => console.log(e));
+            });
+        }
+
+        // 页面加载完成后初始化
+        document.addEventListener('DOMContentLoaded', initPlayer);
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,11 @@
+使用微信开发者工具打开此项目
+项目的页面中
+login, register用于登录、注册
+AI, AI1, AI2用于ai询问页面
+shop, shoplist, shoplist0 ~ shoplist7都是登录后列表里的应用
+shops是商店页面
+food是食谱页面
+contact是发帖交流页面
+homes是开始导航页面
+message是个人信息页面
+rtmpvideo是实时视频页面

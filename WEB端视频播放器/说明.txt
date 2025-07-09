@@ -1,0 +1,4 @@
+该播放器需要接受动态绑定参数：
+stream: hls视频流地址
+predict_api: 预测api
+control_api: 处理舵机控制信息的api

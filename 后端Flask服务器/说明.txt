@@ -1,0 +1,18 @@
+requirement.txt包含所需环境
+项目文件下的server.py是后端服务器的python代码。
+
+其他的非测试用途的python文件：
+1. cry_detect.py可用于哭声的识别
+2. yolov5_dnn.py可用于yolov5检测婴儿是否存在
+
+其他所需文件夹：
+photos存放小程序用到的照片
+static是服务器端的静态文件目录
+templates存放html模板
+text存放小程序用到的文字
+
+其他所需文件：
+config.cfg用于保存服务器配置
+savejpg.jpeg和savejpg.jpg用于暂存设备上传的图片
+sleep_result.txt用于保存最后一次生成的睡眠报告
+tieshi.txt用于保存小程序用到的小贴士文案

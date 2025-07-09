@@ -1,0 +1,2 @@
+需要ffmpeg环境，不需要第三方python环境
+在python环境下运行，根据ui提示，输入rtsp流地址，点击播放即可。

@@ -1,0 +1,6 @@
+shop1 https://search.jd.com/Search?keyword=%E5%81%A5%E8%BA%AB%E6%9E%B6%E5%A9%B4%E5%84%BF%20%E8%B4%9D%E6%81%A9%E6%96%BD&enc=utf-8
+shop2 https://search.jd.com/Search?keyword=%E5%84%BF%E7%AB%A5%E8%BA%AB%E4%BD%93%E4%B9%B3%20%E5%A6%99%E6%80%9D%E4%B9%90&enc=utf-8
+shop3
+shop4
+shop5
+shop6
